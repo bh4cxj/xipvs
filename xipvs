@@ -56,7 +56,7 @@ add)
     echo | tee -a $log
   done
   echo "当前LVS状态：" | tee -a $log
-  /usr/sbin/ipvsadm
+  /usr/sbin/ipvsadm -Ln
   ;;
 *)
   echo "Usage: $0 {start|stop}"
