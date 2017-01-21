@@ -1,0 +1,64 @@
+config=/root/work/xipvs/xipvs.cfg
+log=/var/log/xipvs.log
+LVS_IP_INF=`sed  -n '/^[[:space:]]*$/!{/^[^#]/p}' $config`
+
+[ -f $log ] || touch $log
+
+case "$1" in
+start)
+  /usr/sbin/ipvsadm -C
+  echo | tee -a $log
+  date | tee -a $log
+  echo "$LVS_IP_INF" | while read line;do
+    read NET_FACE VIP PROJ < <(echo "$line" | awk -F"@" '{print $1 " " $2 " " $5}')
+    RIPS=`echo $(echo $line | awk -F"@" '{print $3}')`
+    PORTS=`echo $(echo $line | awk -F"@" '{print $4}')`
+
+    echo "添加LVS项目 ${PROJ}:     网卡---${NET_FACE}   虚拟IP---${VIP}   真实主机---${RIPS}    代理端口---${PORTS}" | tee -a $log
+    for port in ${PORTS};do
+      echo "添加虚拟服务器记录      ipvsadm ${VIP}:${port}" | tee -a $log
+      /usr/sbin/ipvsadm -At ${VIP}:${port} -s rr
+      for rip in ${RIPS};do
+        echo "添加真实服务器记录      ipvsadm ${VIP}:${port} ${rip}:${port}" | tee -a $log
+        /usr/sbin/ipvsadm -at ${VIP}:${port} -r ${rip}:${port} -g
+      done
+      echo | tee -a $log
+    done
+    echo | tee -a $log
+  done
+  echo "当前LVS状态：" | tee -a $log
+  /usr/sbin/ipvsadm -Ln
+  ;;
+stop)
+  /usr/sbin/ipvsadm -C
+  /usr/sbin/ipvsadm -Ln
+  ;;
+add)
+  echo | tee -a $log
+  date | tee -a $log
+  echo "$LVS_IP_INF" | while read line;do
+    read NET_FACE VIP PROJ < <(echo "$line" | awk -F"@" '{print $1 " " $2 " " $5}')
+    RIPS=`echo $(echo $line | awk -F"@" '{print $3}')`
+    PORTS=`echo $(echo $line | awk -F"@" '{print $4}')`
+
+    echo "添加LVS项目 ${PROJ}:     网卡---${NET_FACE}   虚拟IP---${VIP}   真实主机---${RIPS}    代理端口---${PORTS}" | tee -a $log
+    for port in ${PORTS};do
+      /usr/sbin/ipvsadm -Ln | grep -v '-' | grep ${VIP}:${port} > /dev/null
+      [ $? -eq 0 ] && echo $VIP:$port"已存在" && continue
+      echo "添加虚拟服务器记录      ipvsadm ${VIP}:${port}" | tee -a $log
+      /usr/sbin/ipvsadm -At ${VIP}:${port} -s rr
+      for rip in ${RIPS};do
+        echo "添加真实服务器记录      ipvsadm ${VIP}:${port} ${rip}:${port}" | tee -a $log
+        /usr/sbin/ipvsadm -at ${VIP}:${port} -r ${rip}:${port} -g
+      done
+      echo | tee -a $log
+    done
+    echo | tee -a $log
+  done
+  echo "当前LVS状态：" | tee -a $log
+  /usr/sbin/ipvsadm
+  ;;
+*)
+  echo "Usage: $0 {start|stop}"
+  ;;
+esac
